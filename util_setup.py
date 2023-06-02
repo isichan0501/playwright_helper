@@ -143,7 +143,7 @@ def run(
 
 
 if __name__ == '__main__':
-    device_name = random_device(os_name='android')
+    device_name = random_device(os_name='Android')
     # import pdb;pdb.set_trace()
     with sync_playwright() as playwright:
         run(playwright, device_name=device_name)
