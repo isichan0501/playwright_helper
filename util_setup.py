@@ -8,9 +8,9 @@ from xmlrpc.client import Boolean
 from playwright._impl._api_types import TimeoutError
 from typing import Union, List, Set, Tuple, Dict, Optional, Callable, Generator
 
-from .util_proxy import random_proxy, format_proxy
-from .util_device import random_device, generate_device_specs
-from .util_region import GetMap, convert_region_dict
+from util_proxy import random_proxy, format_proxy
+from util_device import random_device, generate_device_specs
+from util_region import GetMap, convert_region_dict
 
 import os
 import sys
@@ -21,7 +21,7 @@ import pysnooper
 from importlib import reload
 import time
 import random
-from . import constants
+import constants
 import asyncio
 from dotenv import load_dotenv
 import pysnooper
@@ -45,9 +45,11 @@ def get_browser(
     device: Dict,
     use_headless: Boolean = False
     ) -> Browser:
+    slow_time = 50
     if device['default_browser_type'] == 'firefox':
         browser = playwright.firefox.launch(
             headless=use_headless,
+            slow_mo=slow_time,
             args=[
                 '--start-maximized',
                 '--foreground',
@@ -60,6 +62,7 @@ def get_browser(
     elif device['default_browser_type'] == 'webkit':
         browser = playwright.webkit.launch(
             headless=use_headless,
+            slow_mo=slow_time,
             args=[
                 '--start-maximized',
                 '--foreground',
@@ -71,6 +74,7 @@ def get_browser(
     else:
         browser = playwright.chromium.launch(
             headless=use_headless,
+            slow_mo=slow_time,
             args=[
                 '--disable-web-security',
                 '--disable-features=IsolateOrigins,site-per-process',
@@ -120,6 +124,8 @@ def get_page(
     context: BrowserContext
     ) -> Page:
     page = context.new_page()
+    page.bring_to_front()
+    # page.set_viewport_size({"width": 1280,"height": 720})
     page.add_init_script(script=constants.SPOOF_FINGERPRINT % generate_device_specs())
     return page
 
@@ -136,17 +142,47 @@ def run(
     # context = browser.new_context(storage_state="state.json")
     context = get_context(browser, device=device, proxy_info=proxy_info)
     page = get_page(context)
+    # page.goto("https://gologin.com/ja/check-browser")
+    #---debug---
     
-    page.goto("https://gologin.com/ja/check-browser")
+    login_id, login_pw = "50019903596", "1634"
+    hp_login.hp_login(page, login_id, login_pw)
+    import pdb;pdb.set_trace()
     page.pause()
     context.storage_state(path="state.json")
+    context.close()
+    browser.close()
+
+
+import util_playwright
+from importlib import reload
+import hp_login
+
 
 
 if __name__ == '__main__':
-    device_name = random_device(os_name='Android')
+    device_name = random_device(os_name='Android');print(device_name)
+    device_name = "Nexus 6P"
+    login_id, login_pw = "50019903596", "1634"
     # import pdb;pdb.set_trace()
     with sync_playwright() as playwright:
-        run(playwright, device_name=device_name)
+        # run(playwright, device_name=device_name)
+        #----debug------
+        device = playwright.devices[device_name]
+        browser = get_browser(playwright=playwright, device=device, use_headless=False)
+        # Create a new context with the saved storage state.
+        # context = browser.new_context(storage_state="state.json")
+        context = get_context(browser, device=device, proxy_info=None)
+        page = get_page(context)
+        
+        login_page = hp_login.LoginPage(page, login_id, login_pw)
+        login_page.login()
+        time.sleep(3)
+        page.reload()
+        import pdb;pdb.set_trace()
+        page.pause()
+        #-----debug end------------
+        
         
 
 

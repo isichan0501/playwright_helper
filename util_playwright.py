@@ -193,6 +193,23 @@ async def does_element_exist_on_page(page: Page, xpath: str, timeout: int = 1000
     except PlaywrightTimeoutError:
         return False
 
+async def get_element(page: Page, by: str, elem: str, timeout: int = 10000):
+    if by == 'role':
+        page.get_by_role()
+    if by == 'text':
+        page.get_by_text()
+    if by == 'label':
+        page.get_by_label()
+    if by == 'placeholder':
+        page.get_by_placeholder()
+    if by == 'alt_text':
+        page.get_by_alt_text()
+    if by == 'title':
+        page.get_by_title()
+    if by == 'test_id':
+        page.get_by_test_id()
+    if by == 'locator':
+        page.locator()
 
 
 def get_random_proxy() -> ProxySettings:
@@ -284,7 +301,7 @@ def add_extract(search_txt):
 
     return None
 
-def add_ifin(search_txt):
+def extract_email(search_txt):
     email_regex = re.compile(r'''(
         [a-zA-Z0-9._%+-]+
         @
@@ -300,6 +317,23 @@ def add_ifin(search_txt):
         return mailado
     return None
 
+
+def get_similarity_ratio(str1, str2):
+    matcher = difflib.SequenceMatcher(None, str1, str2)
+    return matcher.ratio()
+
+
+def get_next_message(messages, message_templates, similarity_threshold=0.8):
+    for template in message_templates:
+        found = False
+        for message in messages:
+            similarity_ratio = get_similarity_ratio(template, message)
+            if similarity_ratio >= similarity_threshold:
+                found = True
+                break
+        if not found:
+            return template
+    return None
 
 
 def mail_what(list_you, tem_ple, namae, asi_if=True, logname="hp"):
@@ -340,7 +374,7 @@ def mail_what(list_you, tem_ple, namae, asi_if=True, logname="hp"):
 
     # メルアドが落ちていたら送信
     for c_a in list(list_a):
-        mailado = add_ifin(c_a)
+        mailado = extract_email(c_a)
         if mailado:
             for u in range(3):
                 mail_ok = send_gmail(tem_ple, mailado, kenmei)
@@ -415,57 +449,6 @@ async def get_firefox(use_headless=True):
         await page.goto("https://gologin.com/ja/check-browser")
 
 
-@decorators.exception_handler
-async def send_gmailsub(formurl, sender_name, money, mailado, kenmei):
-    """playwrightで書き直す"""
-    #フォームURLが複数あればランダムで１つ選ぶ
-    form_urls = formurl.split(',')
-    form_url = random.choice(form_urls)
-    #送信者名と条件文
-    name = sender_name.strip()
-    nakami = money.strip()
-    async with async_playwright() as driver:
-        firefox = driver.devices['Desktop Firefox']
-        browser = await driver.firefox.launch(
-            headless=False,
-            args=[
-                '--start-maximized',
-                '--foreground',
-                '--disable-backgrounding-occluded-windows'
-            ],
-            slow_mo=2000
-            # firefox_user_prefs=constants.FIREFOX_SETTINGS
-            # proxy=helpers.get_random_proxy(),
-        )
-
-        context = await browser.new_context(
-            **firefox,
-            accept_downloads=True,
-            ignore_https_errors=True,
-        )
-        context.set_default_navigation_timeout(60000)
-        page = await context.new_page()
-        await page.goto(form_url)
-        await does_element_exist_on_page(page, "//input[@type='email']", timeout=20000)
-        await safe_fill_form(page, "//input[@type='email']", mailado)
-        inputforms = await page.locator("//input[@type='text']").all()
-        await inputforms[0].fill(kenmei)
-        if 1 < len(inputforms):
-            await inputforms[1].fill(name)
-            xpath = "//form[@id='mG61Hd']/div[2]/div/div[2]/div[4]/div/div/div[2]/div/div/div[2]/textarea"
-            is_exist = await does_element_exist_on_page(page, xpath, timeout=3000)
-            if is_exist:
-                await safe_fill_form(page, xpath, nakami)
-        
-        # submit_xpath = "//form[@id='mG61Hd']/div[2]/div/div[3]/div/div/div/span/span"
-        submit_xpath = "/html/body/div/div[2]/form/div[2]/div/div[3]/div[1]/div[1]/div/span/span"
-        await safe_click_element(page, submit_xpath, delay=2, force=True, wait_load=True)
-        # await page.get_by_text("送信").click(force=True)
-        
-        await asyncio.sleep(2)
-        await page.get_by_text("別の回答を送信").click(force=True)
-        await asyncio.sleep(2)
-        return True
 
 from playwright.sync_api import Playwright, sync_playwright, expect
 
@@ -485,6 +468,7 @@ def func_send_gmail(playwright: Playwright, formurl: str, sender_name: str, mone
     page.get_by_role("textbox", name="メールアドレス").fill(mailado)
     page.get_by_role("textbox", name="お名前").fill(kenmei)
     page.get_by_role("button", name="送信").click()
+    page.get_by_role("textbox", name="その他").fill(nakami)
     with page.expect_navigation():
         page.get_by_role("link", name="別の回答を送信").click()
 
@@ -505,7 +489,7 @@ async def func_send_gmail_async(playwright: Playwright, formurl: str, sender_nam
     #送信者名と条件文
     name = sender_name.strip()
     nakami = money.strip()
-    browser = await playwright.firefox.launch(headless=True)
+    browser = await playwright.firefox.launch(headless=False)
     # firefox = await playwright.devices["Desktop Firefox"]
     context = await browser.new_context(**playwright.devices["Desktop Firefox"])
     page = await context.new_page()
@@ -513,7 +497,10 @@ async def func_send_gmail_async(playwright: Playwright, formurl: str, sender_nam
     await page.wait_for_load_state("networkidle")
     await page.get_by_role("textbox", name="メールアドレス").fill(mailado)
     await page.get_by_role("textbox", name="お名前").fill(kenmei)
+    await page.get_by_role("textbox", name="その他").fill(nakami)
+    # page.pause()
     await page.get_by_role("button", name="送信").click()
+    
     async with page.expect_navigation():
         await page.get_by_role("link", name="別の回答を送信").click()
 
@@ -532,11 +519,13 @@ if __name__ == "__main__":
     """playwright codegen github.com/microsoft/playwright --save-storage=auth.json
     playwright codegen --device="Desktop Firefox" forms.gle/sks
     """
-    formurl="https://forms.gle/skdjd"
-    sender_name="mimi"
+    
+
+    formurl="https://forms.gle/"
+    sender_name="みほ"
     money="""お金がないので、お金をください。"""
-    mailado="ss@gmail.com"
-    kenmei="kenmei"
+    mailado="s@gmail.com"
+    kenmei="こんちゃ"
     # send_gmail(formurl, sender_name, money, mailado, kenmei)
     result = asyncio.run(send_gmail_async(formurl, sender_name, money, mailado, kenmei))
     print('result is {}'.format(result))

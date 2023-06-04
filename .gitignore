@@ -11,6 +11,7 @@ db/
 images/
 logs/
 .env
+db_helper/
 
 # C extensions
 *.so
